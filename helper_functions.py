@@ -4,6 +4,7 @@ import librosa
 import librosa.display
 from scipy import signal
 from scipy.io import wavfile
+import os
 from segmentation import segment_cough
 
 def plot_sample(path_wav, mask=False):
@@ -20,14 +21,14 @@ def plot_sample(path_wav, mask=False):
     plt.xlabel('Time (s)')
     plt.show()
 
-def plot_multiple_samples(path_wavs, max=12, mask=False):
+def plot_multiple_samples(path_wavs, max=12, mask=False, debug=False):
     plots = []
     fig, axs = plt.subplots(max//4, 4, figsize=(20, max))
     index, counter = [0, 0], 0
     for file in os.listdir(path_wavs):
         if counter < max:
             if file.endswith('.wav'):
-                data, sample_rate = librosa.load(f'data/coughvid/{file}')
+                data, sample_rate = librosa.load(f'{path_wavs}{file}')
                 if mask:
                     _, cough_mask = segment_cough(
                         data, sample_rate,
@@ -39,13 +40,14 @@ def plot_multiple_samples(path_wavs, max=12, mask=False):
                     time = np.linspace(0, len(data)/sample_rate, num=len(data))
                     axs[index[0], index[1]].plot(time, data)
                     axs[index[0], index[1]].plot(time, cough_mask)
-                    axs[index[0], index[1]].set_title(f'{index} - {len(plots)}')
+                    axs[index[0], index[1]].set_title(f'{index} ({len(plots)})')
                 else:
                     librosa.display.waveshow(data, sr=sample_rate)
                 plt.xticks(np.arange(0, len(data)/sample_rate, step=1))
                 plt.xlabel('Time (s)')
-                print(index, file, len(plots))
-                plots.append(file)
+                if debug:
+                    print(index, file, len(plots))
+                plots.append(f'{path_wavs}{file}')
                 index[1] += 1
                 if index[1] == 4:
                     index[0] += 1
