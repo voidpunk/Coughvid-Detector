@@ -5,21 +5,68 @@ import librosa.display
 from scipy import signal
 from scipy.io import wavfile
 import os
-from segmentation import segment_cough
+import json
+import pickle
+from coughvid_functions import segment_cough, compute_SNR, preprocess_cough, classify_cough
 
-def plot_sample(path_wav, mask=False):
+
+def segment_audio(
+    path_wav,
+    plot=False,
+    mask=False,
+    snr=False,
+    cough_padding=0.2,
+    min_cough_len=0.1,
+    th_l_multiplier = 0.1,
+    th_h_multiplier = 2
+    ):
     data, sample_rate = librosa.load(path=path_wav)
-    plt.figure(figsize=(10,5))
-    if mask:
-        _, cough_mask = segment_cough(data, sample_rate)
-        time = np.linspace(0, len(data)/sample_rate, num=len(data))
-        plt.plot(time, data)
-        plt.plot(time, cough_mask)
-    else:
-        librosa.display.waveshow(data, sr=sample_rate)
-    plt.xticks(np.arange(0, len(data)/sample_rate, step=1))
-    plt.xlabel('Time (s)')
-    plt.show()
+    cough_segments, cough_mask = segment_cough(
+        data, sample_rate,
+            cough_padding=cough_padding,
+            min_cough_len=min_cough_len,
+            th_l_multiplier = th_l_multiplier,
+            th_h_multiplier = th_h_multiplier
+        )
+    if plot:
+        plt.figure(figsize=(10,5))
+        if mask:
+            time = np.linspace(0, len(data)/sample_rate, num=len(data))
+            plt.plot(time, data)
+            plt.plot(time, cough_mask)
+        else:
+            librosa.display.waveshow(data, sr=sample_rate)
+        plt.xticks(np.arange(0, len(data)/sample_rate, step=1))
+        plt.xlabel('Time (s)')
+        plt.show()
+    if snr:
+        snr = compute_SNR(data, sample_rate)
+        return cough_segments, sample_rate, snr
+    return cough_segments, sample_rate
+
+
+def spectralize_segments(cough_segments, sample_rate, plot=False):
+    segments_spectra = []
+    for segment in cough_segments:
+        # apply short-time Fourier transform
+        stft = librosa.stft(segment)
+        # convert to dB scale
+        db_stft = librosa.amplitude_to_db(np.abs(stft), ref=np.max)
+        # plot the spectrogram
+        if plot:
+            # librosa.display.specshow(db_stft, y_axis='linear', x_axis='s', sr=sample_rate)
+            librosa.display.specshow(db_stft, y_axis='log', x_axis='s', sr=sample_rate)
+            # librosa.display.specshow(stft, y_axis='linear', x_axis='s', sr=sample_rate)
+            # librosa.display.specshow(stft, y_axis='log', x_axis='s', sr=sample_rate)
+        segments_spectra.append(db_stft)
+    return segments_spectra
+
+
+def audio_to_spectrum(path_wav):
+    cough_segments, sample_rate = segment_audio(path_wav)
+    segments_spectra = spectralize_segments(cough_segments, sample_rate)
+    return segments_spectra
+
 
 def plot_multiple_samples(path_wavs, max=12, mask=False, debug=False):
     plots = []
@@ -47,6 +94,9 @@ def plot_multiple_samples(path_wavs, max=12, mask=False, debug=False):
                 plt.xlabel('Time (s)')
                 if debug:
                     print(index, file, len(plots))
+                    with open(f'{path_wavs}{file[:-4]}.json') as f:
+                        data = json.load(f)
+                    print(data, '\n')
                 plots.append(f'{path_wavs}{file}')
                 index[1] += 1
                 if index[1] == 4:
@@ -55,6 +105,7 @@ def plot_multiple_samples(path_wavs, max=12, mask=False, debug=False):
                 counter += 1
     plt.show()
     return plots
+
 
 def plot_spectrum(path_wav, scipy=False):
     if scipy:
@@ -77,6 +128,7 @@ def plot_spectrum(path_wav, scipy=False):
         ax[1].label_outer()
         fig.colorbar(img, ax=ax, format='%+2.f dB')
     plt.show()
+
 
 def plot_features(path_wav, feature):
     data, sample_rate = librosa.load(path=path_wav)
@@ -107,3 +159,5 @@ def plot_features(path_wav, feature):
         ax[1].legend(loc='upper right')
         ax[1].set(title='Tempogram')
     plt.show()
+
+
