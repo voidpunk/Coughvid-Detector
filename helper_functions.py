@@ -1,3 +1,4 @@
+from random import sample
 import numpy as np
 import matplotlib.pyplot as plt
 import librosa
@@ -107,16 +108,20 @@ def plot_multiple_samples(path_wavs, max=12, mask=False, debug=False):
     return plots
 
 
-def plot_spectrum(path_wav, scipy=False):
+def plot_spectrum(wav, scipy=False):
     if scipy:
-        Fs, aud  = wavfile.read(path_wav)
+        sample_rate, data  = wavfile.read(wav)
         plt.figure(figsize=(10,10))
-        _, _, _, _ = plt.specgram(aud, Fs=Fs)
+        _, _, _, _ = plt.specgram(data, Fs=sample_rate)
         plt.title('Spectrogram')
         plt.xlabel('Time (s)')
         plt.ylabel('Frequency (Hz)')
     else:
-        data, sample_rate = librosa.load(path=path_wav)
+        if type(wav) == str:
+            data, sample_rate = librosa.load(path=wav)
+        else:
+            data, sample_rate = wav[0], wav[1]
+            print(data)
         d = librosa.stft(data)
         D = librosa.amplitude_to_db(np.abs(d),ref=np.max)
         fig,ax = plt.subplots(2,1,sharex=True,figsize=(10,10))
@@ -161,3 +166,42 @@ def plot_features(path_wav, feature):
     plt.show()
 
 
+def plot_multiple_views(wav):
+    # load data
+    data, sr = librosa.load(path=wav)
+    # segment data
+    _, cough_mask = segment_cough(
+        data, sr,
+        cough_padding=0.2,
+        min_cough_len=0.1,
+        th_l_multiplier = 0.1,
+        th_h_multiplier = 2
+    )
+    # plot
+    fig, axs = plt.subplots(2, 3, figsize=(20,10))
+    # sample + mask
+    time = np.linspace(0, len(data)/sr, num=len(data))
+    axs[0,0].plot(time, data)
+    axs[0,0].plot(time, cough_mask)
+    axs[0,0].set_xlabel('Time (s)')
+    axs[0,0].set_ylabel('Amplitude')
+    # stft linear spectrogram
+    stft = librosa.stft(data)
+    librosa.display.specshow(stft, y_axis='linear', x_axis='s', sr=sr, ax=axs[0,1])
+    # stft db amplitude linear spectrogram
+    db_stft = librosa.amplitude_to_db(np.abs(stft),ref=np.max)
+    librosa.display.specshow(db_stft, y_axis='linear', x_axis='s', sr=sr, ax=axs[0,2])
+    # chromagram
+    chroma = librosa.feature.chroma_stft(S=np.abs(stft), sr=sr)
+    librosa.display.specshow(chroma, y_axis='chroma', x_axis='s', ax=axs[1,2])
+    # tempogram
+    oenv = librosa.onset.onset_strength(y=data, sr=sr)
+    tempogram = librosa.feature.tempogram(onset_envelope=oenv, sr=sr)
+    ac_global = librosa.autocorrelate(oenv, max_size=tempogram.shape[0])
+    ac_global = librosa.util.normalize(ac_global)
+    times = librosa.times_like(oenv, sr=sr)
+    axs[1,0].plot(times, oenv)
+    axs[1,0].set_xlabel('Time (s)')
+    axs[1,0].set_ylabel('Strength')
+    librosa.display.specshow(tempogram, sr=sr, x_axis='s', y_axis='tempo', cmap='magma',ax=axs[1,1])
+    plt.show()
