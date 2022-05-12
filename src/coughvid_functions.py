@@ -160,6 +160,12 @@ def compute_SNR(x, fs):
     SNR = 0 if (RMS_signal==0 or np.isnan(RMS_noise)) else 20*np.log10(RMS_signal/RMS_noise)
     return SNR
 
+def compute_segment_SNR(x, fs, cough_mask):
+    RMS_signal = 0 if len(x[cough_mask])==0 else np.sqrt(np.mean(np.square(x[cough_mask])))
+    RMS_noise = np.sqrt(np.mean(np.square(x[~cough_mask])))
+    SNR = 0 if (RMS_signal==0 or np.isnan(RMS_noise)) else 20*np.log10(RMS_signal/RMS_noise)
+    return SNR
+
 
 # Class that contains the feature computation functions 
 class features:

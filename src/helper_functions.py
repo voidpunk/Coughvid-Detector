@@ -69,7 +69,16 @@ def audio_to_spectrum(path_wav):
     return segments_spectra
 
 
-def plot_multiple_samples(path_wavs, max=12, mask=False, debug=False):
+def plot_multiple_samples(
+    path_wavs,
+    max=12,
+    mask=False,
+    debug=0,
+    cough_padding=0.2,
+    min_cough_len=0.2,
+    th_l_multiplier = 0.1,
+    th_h_multiplier = 2
+    ):
     plots = []
     fig, axs = plt.subplots(max//4, 4, figsize=(20, max))
     index, counter = [0, 0], 0
@@ -77,27 +86,31 @@ def plot_multiple_samples(path_wavs, max=12, mask=False, debug=False):
         if counter < max:
             if file.endswith('.wav'):
                 data, sample_rate = librosa.load(f'{path_wavs}{file}')
+                with open(f'{path_wavs}{file[:-4]}.json') as f:
+                    metadata = json.load(f)
+                detection = metadata['cough_detected']
                 if mask:
                     _, cough_mask = segment_cough(
                         data, sample_rate,
-                        cough_padding=0.2,
-                        min_cough_len=0.1,
-                        th_l_multiplier = 0.1,
-                        th_h_multiplier = 2
+                        cough_padding=cough_padding,
+                        min_cough_len=min_cough_len,
+                        th_l_multiplier = th_l_multiplier,
+                        th_h_multiplier = th_h_multiplier
                     )
                     time = np.linspace(0, len(data)/sample_rate, num=len(data))
                     axs[index[0], index[1]].plot(time, data)
                     axs[index[0], index[1]].plot(time, cough_mask)
-                    axs[index[0], index[1]].set_title(f'{index} ({len(plots)})')
+                    axs[index[0], index[1]].set_title(f'{index} - {detection} - ({len(plots)})')
                 else:
                     librosa.display.waveshow(data, sr=sample_rate)
                 plt.xticks(np.arange(0, len(data)/sample_rate, step=1))
                 plt.xlabel('Time (s)')
                 if debug:
                     print(index, file, len(plots))
-                    with open(f'{path_wavs}{file[:-4]}.json') as f:
-                        data = json.load(f)
-                    print(data, '\n')
+                    if debug == 2:
+                        with open(f'{path_wavs}{file[:-4]}.json') as f:
+                            data = json.load(f)
+                        print(data, '\n')
                 plots.append(f'{path_wavs}{file}')
                 index[1] += 1
                 if index[1] == 4:
@@ -168,7 +181,10 @@ def plot_features(path_wav, feature):
 
 def plot_multiple_views(wav):
     # load data
-    data, sr = librosa.load(path=wav)
+    if type(wav) == str:
+        data, sr = librosa.load(path=wav)
+    else:
+        data, sr = wav[0], wav[1]
     # segment data
     _, cough_mask = segment_cough(
         data, sr,
