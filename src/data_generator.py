@@ -2,6 +2,7 @@ import os
 import shutil
 import json
 import librosa
+from PIL import Image
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ Functions changed and generalized after data generation, may be bugged!
 """
 
 
-def printer(target=10, base_path='../data/', plot=False):
+def printer(base_path, target=10, plot=False):
     c = 0
     for file in os.listdir(base_path):
         if file.endswith(".json"):
@@ -30,30 +31,42 @@ def printer(target=10, base_path='../data/', plot=False):
             break
 
 
-def directoryzer(base_path='../data/', counter=600):
+def directoryzer(base_path, new_path=None, counter=600, clean=False):
     c = counter
     n_cycle = 0
-    os.mkdir(base_path + 'orginal')
-    base_path = base_path + 'original/'
+    if new_path is not None:
+        target_path = os.path.join(base_path, new_path)
+        os.mkdir(target_path)
+    else:
+        target_path = base_path
     directory = f'{n_cycle}-{c}'
-    os.mkdir(base_path + directory)
+    os.mkdir(os.path.join(target_path, directory))
     for file in tqdm(os.listdir(base_path)):
         if c > 0:
             if file.endswith(".json"):
-                shutil.copy(base_path + file, base_path + directory + '/' + file)
-                shutil.copy(base_path + file.replace('.json', '.wav'), base_path + directory + '/' + file.replace('.json', '.wav'))
-            # elif file.endswith(".wav"):
-            #     shutil.move(base_path + file, base_path + directory + '/' + file)
-            #     shutil.move(base_path + file.replace('.wav', '.json'), base_path + directory + '/' + file.replace('.wav', '.json'))
+                shutil.copy(
+                    os.path.join(base_path, file),
+                    os.path.join(target_path, directory, file)
+                )
+                shutil.copy(
+                    os.path.join(base_path, file.replace('.json', '.wav')),
+                    os.path.join(target_path, directory, file.replace('.json', '.wav'))
+                )
             c -= 1
         else:
             c = counter
             n_cycle += 1
             directory = f'{n_cycle*c}-{n_cycle*c+c}'
-            os.mkdir(base_path + directory)
+            os.mkdir(os.path.join(target_path, directory))
+    if clean:
+        print('Cleaning...')
+        for el in tqdm(os.listdir(base_path)):
+            if not os.path.isdir(os.path.join(base_path, el)):
+                os.remove(os.path.join(base_path, el))
 
 
-def processor(target=-1, base_path='../data/original/', clean=False):
+
+def processor(target=-1, base_path='../data/divided/', clean=False):
     for directory in tqdm(os.listdir(base_path)):
         data = {
             'uuid': [],
@@ -96,10 +109,10 @@ def processor(target=-1, base_path='../data/original/', clean=False):
                         data['gender'].append(entry['gender'] if 'gender' in entry else 'NA')
                         data['condition'].append(entry['respiratory_condition'] if 'respiratory_condition' in entry else 'NA')
                         data['symptoms'].append(entry['fever_muscle_pain'] if 'fever_muscle_pain' in entry else 'NA')
-                        data['el1'].append(entry['el1'] if 'el1' in entry else 'NA')
-                        data['el2'].append(entry['el2'] if 'el2' in entry else 'NA')
-                        data['el3'].append(entry['el3'] if 'el3' in entry else 'NA')
-                        data['el4'].append(entry['el4'] if 'el4' in entry else 'NA')
+                        data['el1'].append(entry['expert_labels_1'] if 'expert_labels_1' in entry else 'NA')
+                        data['el2'].append(entry['expert_labels_2'] if 'expert_labels_2' in entry else 'NA')
+                        data['el3'].append(entry['expert_labels_3'] if 'expert_labels_3' in entry else 'NA')
+                        data['el4'].append(entry['expert_labels_4'] if 'expert_labels_4' in entry else 'NA')
                         data['coordinates'].append((entry['latitude'], entry['longitude']) if 'latitude' in entry else 'NA')
                 else:
                     # update data
@@ -113,10 +126,10 @@ def processor(target=-1, base_path='../data/original/', clean=False):
                     data['gender'].append(entry['gender'] if 'gender' in entry else 'NA')
                     data['condition'].append(entry['respiratory_condition'] if 'respiratory_condition' in entry else 'NA')
                     data['symptoms'].append(entry['fever_muscle_pain'] if 'fever_muscle_pain' in entry else 'NA')
-                    data['el1'].append(entry['el1'] if 'el1' in entry else 'NA')
-                    data['el2'].append(entry['el2'] if 'el2' in entry else 'NA')
-                    data['el3'].append(entry['el3'] if 'el3' in entry else 'NA')
-                    data['el4'].append(entry['el4'] if 'el4' in entry else 'NA')
+                    data['el1'].append(entry['expert_labels_1'] if 'expert_labels_1' in entry else 'NA')
+                    data['el2'].append(entry['expert_labels_2'] if 'expert_labels_2' in entry else 'NA')
+                    data['el3'].append(entry['expert_labels_3'] if 'expert_labels_3' in entry else 'NA')
+                    data['el4'].append(entry['expert_labels_4'] if 'expert_labels_4' in entry else 'NA')
                     data['coordinates'].append((entry['latitude'], entry['longitude']) if 'latitude' in entry else 'NA')
                 c += 1
             if c == target:
@@ -129,7 +142,7 @@ def processor(target=-1, base_path='../data/original/', clean=False):
                 os.remove(base_path + el)
 
 
-def collector(base_path='../data/', orig_path='../data/original/'):
+def collector(base_path='../data/', orig_path='../data/divided/'):
     frag_dir = os.mkdir(base_path + 'fragmented')
     c = 1
     for directory in tqdm(os.listdir(orig_path)):
@@ -137,8 +150,28 @@ def collector(base_path='../data/', orig_path='../data/original/'):
         c += 1
 
 
-if __name__ == '__main__':
-    printer()
-    directoryzer()
-    processor()
-    collector()
+def generator(base_path='../data/extracted/', target=5, plot=False):
+    c = 0
+    for file in tqdm(os.listdir(base_path)):
+        if c == target:
+            break
+        if file.endswith(".wav"):
+            wav, sr = librosa.load(base_path + file)
+            segments, _ = segment_cough(wav, sr)
+            if len(segments) > 0:
+                    for segment in segments:
+                        prepro_segment, _ = preprocess_cough(segment, sr)
+                        spectrum = librosa.stft(prepro_segment)
+                        print(type(spectrum), spectrum.shape)
+                        if plot:
+                            _, ax = plt.subplots(figsize=(10,6))
+                            librosa.display.specshow(spectrum, y_axis='log', x_axis='s', sr=sr, ax=ax)
+                            plt.show()
+        c += 1
+
+
+# printer('../data/original/')
+directoryzer('../data/public_dataset', clean=True)
+# processor()
+# collector()
+# generator()
