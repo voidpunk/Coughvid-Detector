@@ -66,8 +66,8 @@ def directoryzer(base_path, new_path=None, counter=600, clean=False):
 
 
 
-def processor(target=-1, base_path='../data/divided/', clean=False):
-    for directory in tqdm(os.listdir(base_path)):
+def processor(base_path, target=-1, clean=False):
+    for directory in tqdm(sorted(os.listdir(base_path))):
         data = {
             'uuid': [],
             'detection': [],
@@ -86,13 +86,13 @@ def processor(target=-1, base_path='../data/divided/', clean=False):
             'el4': []
         }
         c = 0
-        path = base_path + directory + '/'
+        path = os.path.join(base_path, directory)
         for file in tqdm(os.listdir(path)):
             if file.endswith(".json"):
                 uuid = file.replace('.json', '')
-                with open(path + file) as f:
+                with open(os.path.join(path, file)) as f:
                     entry = json.load(f)
-                wav_path = path + file.replace('.json', '.wav')
+                wav_path = os.path.join(path, file.replace('.json', '.wav'))
                 wav, sr = librosa.load(wav_path)
                 segments, mask = segment_cough(wav, sr)
                 if len(segments) > 0:
@@ -134,44 +134,37 @@ def processor(target=-1, base_path='../data/divided/', clean=False):
                 c += 1
             if c == target:
                 break
-        data = pd.DataFrame(data).to_csv(path + 'data.csv')
+        data = pd.DataFrame(data).to_csv(os.path.join(path, 'data.csv'))
     if clean:
         print('Cleaning...')
         for el in os.listdir(base_path):
-            if not os.path.isdir(base_path + el):
-                os.remove(base_path + el)
+            if not os.path.isdir(os.path.join(base_path, el)):
+                os.remove(os.join.path(base_path, el))
 
 
-def collector(base_path='../data/', orig_path='../data/divided/'):
-    frag_dir = os.mkdir(base_path + 'fragmented')
-    c = 1
-    for directory in tqdm(os.listdir(orig_path)):
-        shutil.copy(f'{frag_dir}/{directory}/data.csv', f'{frag_dir}/data{c}.csv')
-        c += 1
+def collector(base_path, dest_path=None, transfer=False):
+    if dest_path is None:
+        dest_path = os.path.join(base_path, 'fragments')
+        os.mkdir(dest_path)
+    i = 0
+    for directory in tqdm(sorted(os.listdir(base_path))):
+        if directory == 'fragments':
+            continue
+        if not transfer:
+            shutil.copy(
+                os.path.join(base_path, directory, 'data.csv'),
+                os.path.join(base_path, dest_path, f'data{i}.csv')
+            )
+            i += 1
+        else:
+            shutil.move(
+                os.path.join(base_path, directory, 'data.csv'),
+                os.path.join(base_path, dest_path, f'data{i}.csv')
+            )
+            i += 1
 
 
-def generator(base_path='../data/extracted/', target=5, plot=False):
-    c = 0
-    for file in tqdm(os.listdir(base_path)):
-        if c == target:
-            break
-        if file.endswith(".wav"):
-            wav, sr = librosa.load(base_path + file)
-            segments, _ = segment_cough(wav, sr)
-            if len(segments) > 0:
-                    for segment in segments:
-                        prepro_segment, _ = preprocess_cough(segment, sr)
-                        spectrum = librosa.stft(prepro_segment)
-                        print(type(spectrum), spectrum.shape)
-                        if plot:
-                            _, ax = plt.subplots(figsize=(10,6))
-                            librosa.display.specshow(spectrum, y_axis='log', x_axis='s', sr=sr, ax=ax)
-                            plt.show()
-        c += 1
-
-
-# printer('../data/original/')
-directoryzer('../data/public_dataset', clean=True)
-# processor()
-# collector()
-# generator()
+# printer('../data/public_dataset')
+# directoryzer('../data/public_dataset', clean=True)
+# processor('../data/public_dataset', clean=True)
+# collector('../data/public_dataset', transfer=True)
