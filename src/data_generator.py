@@ -1,3 +1,4 @@
+import csv
 import os
 import shutil
 import json
@@ -164,7 +165,76 @@ def collector(base_path, dest_path=None, transfer=False):
             i += 1
 
 
+def csver(base_path, dest_path=None, clean=False):
+    if dest_path is None:
+        dest_path = os.path.join(base_path, 'extracted')
+    os.mkdir(dest_path)
+    for file in tqdm(sorted(os.listdir(base_path))):
+        if file.endswith(".csv"):
+            df = pd.read_csv(os.path.join(base_path, file), index_col=0)
+            df = df[
+                (df.detection >= 0.8) & 
+                (
+                    (df.status.notna()) | 
+                    (df.el1.notna())    | 
+                    (df.el2.notna())    | 
+                    (df.el3.notna())    | 
+                    (df.el4.notna())
+                )
+            ]
+            df.reset_index(drop=True, inplace=True)
+            df.drop(
+                columns=[
+                    'uuid',
+                    'detection',
+                    'age',
+                    'gender',
+                    'condition',
+                    'symptoms',
+                    'coordinates',
+                    'snr',
+                    'rate',
+                ],
+                inplace=True
+            )
+            df.el1.fillna('na', inplace=True)
+            df.el2.fillna('na', inplace=True)
+            df.el3.fillna('na', inplace=True)
+            df.el4.fillna('na', inplace=True)
+            df.status.fillna('na', inplace=True)
+            def get_diagnosis(el):
+                if el == 'na':
+                    return '0'
+                elif el.find('upper_infection') != -1:
+                    return '1'
+                elif el.find('lower_infection') != -1:
+                    return '2'
+                elif el.find('COVID-19') != -1:
+                    return '3'
+            def get_Status(el):
+                if el == 'na':
+                    return '0'
+                elif el.find('healthy') != -1:
+                    return '1'
+                elif el.find('symptomatic') != -1:
+                    return '2'
+                elif el.find('COVID-19') != -1:
+                    return '3'
+            df.el1 = df.el1.map(get_diagnosis)
+            df.el2 = df.el2.map(get_diagnosis)
+            df.el3 = df.el3.map(get_diagnosis)
+            df.el4 = df.el4.map(get_diagnosis)
+            df.status = df.status.map(get_Status)
+            df.to_csv(os.path.join(dest_path, file))
+    if clean:
+        print('Cleaning...')
+        for el in os.listdir(base_path):
+            if not os.path.isdir(os.path.join(base_path, el)):
+                os.remove(os.join.path(base_path, el))
+
+
 # printer('../data/public_dataset')
 # directoryzer('../data/public_dataset', clean=True)
 # processor('../data/public_dataset', clean=True)
 # collector('../data/public_dataset', transfer=True)
+# csver('../data/fragments', clean=False)
