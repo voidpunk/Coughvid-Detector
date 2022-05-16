@@ -1,4 +1,3 @@
-import csv
 import os
 import shutil
 import json
@@ -21,7 +20,7 @@ def printer(base_path, target=10, plot=False):
     c = 0
     for file in os.listdir(base_path):
         if file.endswith(".json"):
-            with open(base_path + file) as f:
+            with open(os.path.join(base_path, file)) as f:
                 data = f.read()
             print(data)
             if plot:
@@ -138,29 +137,30 @@ def processor(base_path, target=-1, clean=False):
         data = pd.DataFrame(data).to_csv(os.path.join(path, 'data.csv'))
     if clean:
         print('Cleaning...')
-        for el in os.listdir(base_path):
-            if not os.path.isdir(os.path.join(base_path, el)):
-                os.remove(os.join.path(base_path, el))
+        for directory in tqdm(os.listdir(base_path)):
+            for file in os.listdir(os.path.join(base_path, directory)):
+                if not file.endswith('.csv'):
+                    os.remove(os.path.join(base_path, directory, file))
 
 
 def collector(base_path, dest_path=None, transfer=False):
     if dest_path is None:
         dest_path = os.path.join(base_path, 'fragments')
         os.mkdir(dest_path)
-    i = 0
+    i = 1
     for directory in tqdm(sorted(os.listdir(base_path))):
         if directory == 'fragments':
             continue
         if not transfer:
             shutil.copy(
                 os.path.join(base_path, directory, 'data.csv'),
-                os.path.join(base_path, dest_path, f'data{i}.csv')
+                os.path.join(dest_path, f'data{i}.csv')
             )
             i += 1
         else:
             shutil.move(
                 os.path.join(base_path, directory, 'data.csv'),
-                os.path.join(base_path, dest_path, f'data{i}.csv')
+                os.path.join(dest_path, f'data{i}.csv')
             )
             i += 1
 
@@ -233,8 +233,110 @@ def csver(base_path, dest_path=None, clean=False):
                 os.remove(os.join.path(base_path, el))
 
 
-# printer('../data/public_dataset')
-# directoryzer('../data/public_dataset', clean=True)
-# processor('../data/public_dataset', clean=True)
-# collector('../data/public_dataset', transfer=True)
-# csver('../data/fragments', clean=False)
+def get_diagnosis(el):
+    if str(el) == 'na':
+        return '0'
+    elif str(el).find('diagnosis') == -1:
+        return '0'
+    elif str(el).find('upper_infection') != -1:
+        return '1'
+    elif str(el).find('lower_infection') != -1:
+        return '2'
+    elif str(el).find('COVID-19') != -1:
+        return '3'
+    elif str(el).find('obstructive_disease') != -1:
+        return '4'
+    elif str(el).find('healthy_cough') != -1:
+        return '5'
+    else:
+        print(el)
+        raise Exception('Unknown diagnosis')
+
+
+def get_Status(el):
+    if el == 'na':
+        return '0'
+    elif el.find('healthy') != -1:
+        return '1'
+    elif el.find('symptomatic') != -1:
+        return '2'
+    elif el.find('COVID-19') != -1:
+        return '3'
+    else:
+        print(el)
+        raise Exception('Unknown status')
+
+
+def get_code(meta):
+    status = meta['status'] if 'status' in meta else 'na'
+    el1 = meta['expert_labels_1'] if 'expert_labels_1' in meta else 'na'
+    el2 = meta['expert_labels_2'] if 'expert_labels_2' in meta else 'na'
+    el3 = meta['expert_labels_3'] if 'expert_labels_3' in meta else 'na'
+    el4 = meta['expert_labels_4'] if 'expert_labels_4' in meta else 'na'
+    if status == 'na' and el1 == 'na' and el2 == 'na' and el3 == 'na' and el4 == 'na':
+        return 0
+    status = get_Status(status)
+    el1 = get_diagnosis(el1)
+    el2 = get_diagnosis(el2)
+    el3 = get_diagnosis(el3)
+    el4 = get_diagnosis(el4)
+    code = status + el1 + el2 + el3 + el4
+    return code
+
+
+def data_generator(base_path, clean=False, target=-1, db=False, plot=False):
+    c = 0
+    path = base_path
+    for file in tqdm(os.listdir(path)):
+        if file.endswith(".json"):
+            # get filename
+            filename = file[:-5]
+            # read metadata
+            with open(os.path.join(path, file)) as f:
+                meta = json.load(f)
+            # filter for cough detection
+            if float(meta['cough_detected']) < 0.8:
+                if clean:
+                    # remove json and wav files
+                    os.remove(os.path.join(base_path, f'{filename}.json'))
+                    os.remove(os.path.join(base_path, f'{filename}.wav'))
+                continue
+            code = get_code(meta)
+            # filter for status-diagnosis availability
+            if code == 0:
+                if clean:
+                    # remove json and wav files
+                    os.remove(os.path.join(base_path, f'{filename}.json'))
+                    os.remove(os.path.join(base_path, f'{filename}.wav'))
+                continue
+            # read audio
+            wav_path = os.path.join(path, file.replace('.json', '.wav'))
+            wav, sr = librosa.load(wav_path)
+            # process audio
+            segments, _ = segment_cough(wav, sr)
+            if len(segments) > 0:
+                for segment in segments:
+                    prepro_segment, _ = preprocess_cough(segment, sr)
+                    spectrum = librosa.stft(prepro_segment)
+                    if db:
+                        spectrum = librosa.amplitude_to_db(np.abs(spectrum), ref=np.max)
+                    if plot:
+                        fig, ax = plt.subplots(figsize=(10,6))
+                        image = librosa.display.specshow(spectrum, y_axis='linear', x_axis='s', sr=sr, ax=ax)
+                        plt.show()
+                    # convert spectrum to image
+                    spectrum = spectrum.astype(np.uint8)
+                    img = Image.fromarray(spectrum)
+                    img.save(os.path.join(base_path, f'{c}-{code}.png'))
+                    c += 1
+            if clean:
+                # remove json and wav files
+                os.remove(os.path.join(base_path, f'{filename}.json'))
+                os.remove(os.path.join(base_path, f'{filename}.wav'))
+        if c == target:
+            break
+
+
+base_path = '../data/public_dataset'
+# printer(base_path)
+data_generator(base_path, clean=True, target=-1, db=False)
