@@ -58,7 +58,7 @@ def directoryzer(base_path, new_path=None, counter=600, clean=False):
             n_cycle += 1
             directory = f'{n_cycle*c}-{n_cycle*c+c}'
             os.mkdir(os.path.join(target_path, directory))
-    if clean:
+    if clean: 
         print('Cleaning...')
         for el in tqdm(os.listdir(base_path)):
             if not os.path.isdir(os.path.join(base_path, el)):
