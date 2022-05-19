@@ -7,6 +7,7 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from operator import itemgetter
 from ast import literal_eval
 from coughvid_functions import segment_cough, preprocess_cough, compute_segment_SNR
 from helper_functions import plot_multiple_views
@@ -284,15 +285,22 @@ def get_code(meta):
     return code
 
 
-def data_generator(base_path, clean=False, target=-1, db=False, plot=False):
+def data_generator(base_path, dest_path=None, clean=False, target=-1, db=False, plot=False):
     c = 0
-    path = base_path
-    for file in tqdm(os.listdir(path)):
+    # create output directory if needed
+    if dest_path is None:
+        dest_path = os.path.join(base_path, 'output')
+    if not os.path.exists(dest_path):
+        os.mkdir(dest_path)
+    # check if output directory is empty
+    if len(os.listdir(dest_path)) != 0:
+        raise Exception('Output folder is not empty!')
+    for file in tqdm(os.listdir(base_path)):
         if file.endswith(".json"):
             # get filename
             filename = file[:-5]
             # read metadata
-            with open(os.path.join(path, file)) as f:
+            with open(os.path.join(base_path, file)) as f:
                 meta = json.load(f)
             # filter for cough detection
             if float(meta['cough_detected']) < 0.8:
@@ -310,7 +318,7 @@ def data_generator(base_path, clean=False, target=-1, db=False, plot=False):
                     os.remove(os.path.join(base_path, f'{filename}.wav'))
                 continue
             # read audio
-            wav_path = os.path.join(path, file.replace('.json', '.wav'))
+            wav_path = os.path.join(base_path, file.replace('.json', '.wav'))
             wav, sr = librosa.load(wav_path)
             # process audio
             segments, _ = segment_cough(wav, sr)
@@ -327,7 +335,7 @@ def data_generator(base_path, clean=False, target=-1, db=False, plot=False):
                     # convert spectrum to image
                     spectrum = spectrum.astype(np.uint8)
                     img = Image.fromarray(spectrum)
-                    img.save(os.path.join(base_path, f'{c}-{code}.png'))
+                    img.save(os.path.join(dest_path, f'{c}-{code}.png'))
                     c += 1
             if clean:
                 # remove json and wav files
@@ -337,6 +345,86 @@ def data_generator(base_path, clean=False, target=-1, db=False, plot=False):
             break
 
 
-base_path = '../data/public_dataset'
-# printer(base_path)
-data_generator(base_path, clean=True, target=-1, db=False)
+def clear_ambiguous(path):
+    univoque = [
+        el for el in files if
+            el[-8:-4].count('1') == 1 and (
+                el[-8:-4].count('2') == 0 and
+                el[-8:-4].count('3') == 0 and
+                el[-8:-4].count('4') == 0 and
+                el[-8:-4].count('5') == 0
+            ) or
+            el[-8:-4].count('2') == 1 and (
+                el[-8:-4].count('1') == 0 and
+                el[-8:-4].count('3') == 0 and
+                el[-8:-4].count('4') == 0 and
+                el[-8:-4].count('5') == 0
+            ) or
+            el[-8:-4].count('3') == 1 and (
+                el[-8:-4].count('1') == 0 and
+                el[-8:-4].count('2') == 0 and
+                el[-8:-4].count('4') == 0 and
+                el[-8:-4].count('5') == 0
+            ) or
+            el[-8:-4].count('4') == 1 and (
+                el[-8:-4].count('1') == 0 and
+                el[-8:-4].count('2') == 0 and
+                el[-8:-4].count('3') == 0 and
+                el[-8:-4].count('5') == 0
+            ) or
+            el[-8:-4].count('5') == 1 and (
+                el[-8:-4].count('1') == 0 and
+                el[-8:-4].count('2') == 0 and
+                el[-8:-4].count('3') == 0 and
+                el[-8:-4].count('4') == 0
+            ) or
+            el[-8:-4].count('0') == 4 or
+            el[-8:-4].count('1') == 4 or
+            el[-8:-4].count('2') == 4 or
+            el[-8:-4].count('3') == 4 or
+            el[-8:-4].count('4') == 4 or
+            el[-8:-4].count('5') == 4
+    ]
+    univoque_cut = [el[-8:-4] for el in univoque]
+    for el in os.listdir(path):
+        if el[-8:-4] not in univoque_cut:
+            os.remove(os.path.join(path, el))
+
+
+def label_func(file):
+    # print(file)
+    status = file.split('-')[1][0]
+    code = file[-8:-4]
+    if code.count('0') == 4:
+        syn = 0
+    else:
+        count = (
+            (1, code.count('1')),
+            (2, code.count('2')),
+            (3, code.count('3')),
+            (4, code.count('4')),
+            (5, code.count('5'))
+        )
+        syn = max(count, key=itemgetter(1))[0]
+    code = status + str(syn)
+    # print(code)
+    covid = ['33', '03', '30', '23', '31', '32', '34']
+    other = ['15', '05', '10', '25', '21', '22', '24', '01', '02', '04', '20']
+    discard = ['11', '12', '13', '14', '35']
+    if code in covid:
+        return True
+    elif code in other:
+        return False
+    else:
+        return 'del'
+
+
+def cleaner(path):
+    print(f'Initial elements:\t{len(os.listdir(path))}')
+    clear_ambiguous(path)
+    print(f'Unambiguous elements:\t{len(os.listdir(path))}')
+    files = os.listdir(path)
+    for el in files:
+        if label_func(el) == 'del':
+            os.remove(os.path.join(path, el))
+    print('Final elements: ', len(os.listdir(path)))
