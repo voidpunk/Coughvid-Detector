@@ -11,7 +11,6 @@ from modules.helper_functions import (
     segment_cough,
     preprocess_cough,
     classify_cough,
-    label_func
 )
 
 import warnings
@@ -55,6 +54,29 @@ def process(path, save=True, mkdir=False, display=False):
     return images
 
 
+def label_func(file):
+    status = file.split('-')[1][0]
+    code = file[-8:-4]
+    if code.count('0') == 4:
+        syn = 0
+    else:
+        count = (
+            (1, code.count('1')),
+            (2, code.count('2')),
+            (3, code.count('3')),
+            (4, code.count('4')),
+            (5, code.count('5'))
+        )
+        syn = max(count, key=itemgetter(1))[0]
+    code = status + str(syn)
+    covid = ['33', '03', '30', '23', '31', '32', '34']
+    other = ['15', '05', '10', '25', '21', '22', '24', '01', '02', '04', '20']
+    if code in covid:
+        return True
+    elif code in other:
+        return False
+
+
 def predict(model_path, data_path, clean=True, verbose=False):
     predictions = []
     model = load_learner(Path(model_path))
@@ -64,12 +86,14 @@ def predict(model_path, data_path, clean=True, verbose=False):
         print('index: [1]  label:', model.dls.vocab[1], '  = COVID19')
         print('\n')
     for img in os.listdir(data_path):
-        prediction = model.predict(os.path.join(data_path, img))
-        if verbose: print(img, prediction)
-        if clean:
-            predictions.append(prediction[2][0].item())
-        else:
-            predictions.append(prediction)
+        if img.endswith('.png'):
+            prediction = model.predict(os.path.join(data_path, img))
+            if verbose: print(img, prediction)
+            if clean:
+                predictions.append(prediction[2][1].item())
+            else:
+                predictions.append(prediction)
+    # predictions: list of decimal probabilities of having COVID19-related cough
     return predictions
 
 
@@ -79,7 +103,7 @@ def pipeline(
     cnn_model_path,
     check_threshold=0.8,
     predict_threshold=0.8,
-    weighing_formula='average',
+    weighing_formula='majority_ceil',
     verbose=False
     ):
     audio_path = os.path.join(
@@ -91,30 +115,27 @@ def pipeline(
     )
     # check if the sample contains cough
     check_probability = check(xgb_model_path, audio_path)
-    if check_probability < check_threshold:
-        return 'NA' # no cough
+    # if check_threshold > 0:
+    #     if check_probability < check_threshold:
+    #         return 'NA' # no cough
     # process the sample
     process(audio_path)
     # predict the sample
-    cache_path = os.path.join(data_directory, 'cache')
+    cache_path = os.path.join(data_directory)
     cnn_model_path = os.path.join(cnn_model_path, 'model.pkl')
     predictions = predict(cnn_model_path, cache_path, verbose=verbose)
+    print(predictions)
+    print('\n')
     if weighing_formula == 'average_floor':
         prediction = int(np.floor(np.average(predictions)))
     elif weighing_formula == 'average_ceil':
         prediction = int(np.ceil(np.average(predictions)))
     elif weighing_formula == 'majority_floor':
-        predictions = [1 if el > predict_threshold else 0 for el in predictions]
-        prediction = int(np.floor(np.average(predictions)))
+        prediction = int(np.floor(np.average(
+            [1 if el > predict_threshold else 0 for el in predictions]
+        )))
     elif weighing_formula == 'majority_ceil':
-        predictions = [1 if el > predict_threshold else 0 for el in predictions]
-        prediction = int(np.ceil(np.average(predictions)))
-    return prediction
-    # print(prediction)
-
-
-
-# pipeline('../trials', '../models/xgb', '../models/cnn', weighing_formula='average_ceil')
-# pipeline('../trials', '../models/xgb', '../models/cnn', weighing_formula='average_floor')
-# pipeline('../trials', '../models/xgb', '../models/cnn', weighing_formula='majority_ceil')
-# pipeline('../trials', '../models/xgb', '../models/cnn', weighing_formula='majority_floor')
+        prediction = int(np.ceil(np.average(
+            [1 if el > predict_threshold else 0 for el in predictions]
+        )))
+    return prediction, np.average(predictions), check_probability
