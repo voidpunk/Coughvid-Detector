@@ -12,10 +12,6 @@ from ast import literal_eval
 from coughvid_functions import segment_cough, preprocess_cough, compute_segment_SNR
 from helper_functions import plot_multiple_views
 
-"""
-Functions changed and generalized after data generation, may be bugged!
-"""
-
 
 def printer(base_path, target=10, plot=False):
     c = 0
@@ -346,6 +342,7 @@ def data_generator(base_path, dest_path=None, clean=False, target=-1, db=False, 
 
 
 def clear_ambiguous(path):
+    files = os.listdir(path)
     univoque = [
         el for el in files if
             el[-8:-4].count('1') == 1 and (
@@ -391,7 +388,7 @@ def clear_ambiguous(path):
             os.remove(os.path.join(path, el))
 
 
-def label_func(file):
+def label_del_func(file):
     # print(file)
     status = file.split('-')[1][0]
     code = file[-8:-4]

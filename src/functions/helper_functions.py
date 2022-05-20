@@ -221,3 +221,26 @@ def plot_multiple_views(wav):
     axs[1,0].set_ylabel('Strength')
     librosa.display.specshow(tempogram, sr=sr, x_axis='s', y_axis='tempo', cmap='magma',ax=axs[1,1])
     plt.show()
+
+
+def label_func(file):
+    status = file.split('-')[1][0]
+    code = file[-8:-4]
+    if code.count('0') == 4:
+        syn = 0
+    else:
+        count = (
+            (1, code.count('1')),
+            (2, code.count('2')),
+            (3, code.count('3')),
+            (4, code.count('4')),
+            (5, code.count('5'))
+        )
+        syn = max(count, key=itemgetter(1))[0]
+    code = status + str(syn)
+    covid = ['33', '03', '30', '23', '31', '32', '34']
+    other = ['15', '05', '10', '25', '21', '22', '24', '01', '02', '04', '20']
+    if code in covid:
+        return True
+    elif code in other:
+        return False
