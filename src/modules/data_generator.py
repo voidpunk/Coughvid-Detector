@@ -1,16 +1,20 @@
 import os
-import shutil
 import json
+import shutil
 import librosa
-from PIL import Image
-from tqdm import tqdm
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from PIL import Image
+from ast import literal_eval
 import matplotlib.pyplot as plt
 from operator import itemgetter
-from ast import literal_eval
-from coughvid_functions import segment_cough, preprocess_cough, compute_segment_SNR
-from helper_functions import plot_multiple_views
+from modules.helper_functions import plot_multiple_views
+from modules.coughvid_functions import (
+    segment_cough,
+    preprocess_cough,
+    compute_segment_SNR
+)
 
 
 def printer(base_path, target=10, plot=False):

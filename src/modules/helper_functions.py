@@ -1,14 +1,18 @@
-from random import sample
-import numpy as np
-import matplotlib.pyplot as plt
-import librosa
-import librosa.display
-from scipy import signal
-from scipy.io import wavfile
 import os
 import json
 import pickle
-from coughvid_functions import segment_cough, compute_SNR, preprocess_cough, classify_cough
+import librosa
+import numpy as np
+import librosa.display
+from scipy import signal
+from scipy.io import wavfile
+import matplotlib.pyplot as plt
+from modules.coughvid_functions import (
+    segment_cough,
+    compute_SNR,
+    preprocess_cough,
+    classify_cough
+)
 
 
 def segment_audio(

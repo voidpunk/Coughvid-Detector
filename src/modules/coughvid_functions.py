@@ -1,15 +1,15 @@
 import os
-import numpy as np
-import pandas as pd
 import librosa
 import subprocess
+import numpy as np
+import pandas as pd
 from pathlib import Path
 from scipy import signal
 from scipy.io import wavfile
 from scipy.stats import kurtosis
 from scipy.integrate import simps
-from scipy.signal import butter,filtfilt, cwt, hilbert, resample, decimate, spectrogram
 from scipy.signal.windows import get_window
+from scipy.signal import butter,filtfilt, cwt, hilbert, resample, decimate, spectrogram
 
 
 def classify_cough(x, fs, model, scaler):
