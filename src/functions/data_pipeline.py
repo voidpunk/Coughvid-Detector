@@ -102,7 +102,7 @@ def pipeline(
     elif weighing_formula == 'majority_ceil':
         predictions = [1 if el > predict_threshold else 0 for el in predictions]
         prediction = int(np.ceil(np.average(predictions)))
-    # return prediction
+    return prediction
     print(prediction)
 
 
